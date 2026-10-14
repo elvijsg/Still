@@ -40,20 +40,23 @@ main {
   box-shadow: 0 30px 60px rgba(0, 0, 0, .45);
 }
 h1 {
-  margin: 0 0 28px; text-align: center;
+  margin: 0 0 12px; text-align: center;
   font-size: 1.5rem; font-weight: 300; letter-spacing: .12em;
 }
+.intro { margin: 0 0 28px; text-align: center; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.label { margin: 18px 0 8px 4px; font-size: .72rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.label:first-of-type { margin-top: 0; }
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Noise type selector */
 .types {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  display: flex; flex-wrap: wrap; gap: 4px;
   padding: 4px; background: var(--well);
   border: 1px solid var(--line); border-radius: 16px;
 }
 .types button {
-  padding: 12px 0; border: 0; border-radius: 12px;
+  flex: 1 1 calc(25% - 4px); padding: 12px 0; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: .9rem;
 }
 .types button[aria-pressed="true"] { background: #1e2230; color: var(--text); }
@@ -61,7 +64,7 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 /* Play button */
 #play {
   display: grid; place-items: center;
-  width: 96px; height: 96px; margin: 36px auto;
+  width: 96px; height: 96px; margin: 28px auto;
   border: 0; border-radius: 50%;
   background: var(--accent); color: #0a0b0e;
   box-shadow: 0 0 0 10px rgba(183, 196, 255, .08);
@@ -74,8 +77,11 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .pp[data-playing="true"] .i-pause { display: block; }
 
 /* Forest view */
+.views { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }
+.hint { margin: 0 0 12px 4px; color: var(--muted); font-size: .8rem; opacity: .8; }
+.view-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .scene-btn {
-  width: 100%; margin-top: 24px; padding: 13px;
+  padding: 12px 0;
   background: transparent; color: var(--muted);
   border: 1px solid var(--line); border-radius: 16px; font-size: .9rem;
 }
@@ -131,12 +137,26 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bord
 <!-- ===== 2. LAYOUT ===== -->
 <main>
   <h1>Still</h1>
+  <p class="intro">Soft, continuous noise for sleep and concentration. Everything is generated on your device, with no ads, accounts or tracking.</p>
 
-  <div class="types" role="group" aria-label="Noise type">
+  <h2 class="label">Noise</h2>
+  <div class="types" role="group" aria-label="Noise">
     <button data-type="white" aria-pressed="false">White</button>
     <button data-type="pink" aria-pressed="false">Pink</button>
     <button data-type="brown" aria-pressed="false">Brown</button>
+    </div>
+  <h2 class="label">Nature</h2>
+  <div class="types" role="group" aria-label="Nature sounds">
     <button data-type="rain" aria-pressed="false">Rain</button>
+    <button data-type="fan" aria-pressed="false">Fan</button>
+    <button data-type="water" aria-pressed="false">Water</button>
+    <button data-type="nature" aria-pressed="false">Forest</button>
+  </div>
+  <h2 class="label">For kids</h2>
+  <div class="types" role="group" aria-label="Sounds for kids">
+    <button data-type="lullaby" aria-pressed="false">Lullaby</button>
+    <button data-type="heart" aria-pressed="false">Heartbeat</button>
+    <button data-type="shush" aria-pressed="false">Shush</button>
   </div>
 
   <button id="play" class="pp" aria-label="Play" data-playing="false">
@@ -158,7 +178,16 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bord
     </div>
   </div>
 
-  <button id="openScene" class="scene-btn">Forest view</button>
+  <div class="views">
+    <h2 class="label">Views</h2>
+    <p class="hint">Open a full-screen view to watch while you listen.</p>
+    <div class="view-row">
+      <button class="scene-btn" data-view="forest">Forest</button>
+      <button class="scene-btn" data-view="night">Night</button>
+      <button class="scene-btn" data-view="ocean">Ocean</button>
+      <button class="scene-btn" data-view="fire">Fire</button>
+    </div>
+  </div>
 </main>
 
 <!-- Full-screen forest view (drawn with code, see script) -->
@@ -196,7 +225,7 @@ let suspendTimer = null;
 let buffers = {};            // generated noise, cached per type
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem("still") || "{}"); } catch (e) {}
-let type = ["white", "pink", "brown", "rain"].includes(saved.type) ? saved.type : "brown";
+let type = ["white", "pink", "brown", "rain", "fan", "water", "nature", "lullaby", "heart", "shush"].includes(saved.type) ? saved.type : "brown";
 let volume = Number.isFinite(saved.volume) ? saved.volume : 50;
 
 let timerMinutes = 0, remainingMs = 0, endAt = 0, tickId = null, fadingOut = false;
@@ -205,6 +234,18 @@ const $ = (s) => document.querySelector(s);
 const audioEl = $("#out");
 
 // ---- Noise generation (pure maths, no audio files) ----
+
+// Adds one short sweeping beep (used for bubbles, crickets and birds)
+function addTone(a, start, f0, f1, seconds, amp) {
+  const rate = ctx.sampleRate, n = Math.floor(seconds * rate);
+  start = Math.max(0, Math.floor(start));
+  let ph = 0;
+  for (let j = 0; j < n && start + j < a.length; j++) {
+    const x = j / n;
+    ph += 2 * Math.PI * (f0 + (f1 - f0) * x) / rate;
+    a[start + j] += Math.sin(ph) * amp * Math.sin(Math.PI * x);
+  }
+}
 function fillNoise(kind, a) {
   if (kind === "white") {
     for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1;
@@ -221,6 +262,63 @@ function fillNoise(kind, a) {
       b5 = -0.7616 * b5 - w * 0.016898;
       a[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
       b6 = w * 0.115926;
+    }
+  } else if (kind === "shush") {
+    // Soft "shhh": noise between about 600 Hz and 4 kHz (the slow swell is added later)
+    let lp1 = 0, lp2 = 0;
+    for (let i = 0; i < a.length; i++) {
+      const w = Math.random() * 2 - 1;
+      lp1 += 0.5 * (w - lp1);
+      lp2 += 0.08 * (w - lp2);
+      a[i] = lp1 - lp2;
+    }
+  } else if (kind === "fan") {
+    // Airy whoosh: noise limited to the middle frequencies (the hum is added later)
+    let lp1 = 0, lp2 = 0;
+    for (let i = 0; i < a.length; i++) {
+      const w = Math.random() * 2 - 1;
+      lp1 += 0.2 * (w - lp1);
+      lp2 += 0.01 * (w - lp2);
+      a[i] = lp1 - lp2;
+    }
+  } else if (kind === "water") {
+    // Soft flowing hiss plus many small bubbles that rise in pitch
+    let lp1 = 0, lp2 = 0;
+    for (let i = 0; i < a.length; i++) {
+      const w = Math.random() * 2 - 1;
+      lp1 += 0.12 * (w - lp1);
+      lp2 += 0.01 * (w - lp2);
+      a[i] = (lp1 - lp2) * 0.5;
+    }
+    const bubbles = Math.floor((a.length / ctx.sampleRate) * 35);
+    for (let d = 0; d < bubbles; d++) {
+      const f0 = 300 + Math.random() * 900;
+      addTone(a, Math.random() * a.length, f0, f0 * (1.5 + Math.random() * 2),
+        0.02 + Math.random() * 0.05, 0.03 + Math.random() * 0.08);
+    }
+  } else if (kind === "nature") {
+    const rate = ctx.sampleRate, secs = a.length / rate;
+    let lp = 0, lp2 = 0; // very faint night air
+    for (let i = 0; i < a.length; i++) {
+      const w = Math.random() * 2 - 1;
+      lp += 0.05 * (w - lp);
+      lp2 += 0.003 * (w - lp2);
+      a[i] = (lp - lp2) * 0.15;
+    }
+    // Crickets: quick chirps of three pulses
+    for (let c = 0; c < secs * 5; c++) {
+      const f = 4200 + Math.random() * 1000, s = Math.random() * (secs - 0.3) * rate;
+      for (let p = 0; p < 3; p++) addTone(a, s + p * 0.035 * rate, f, f, 0.015, 0.05);
+    }
+    // Birds: little phrases of two to four notes
+    for (let b = 0; b < secs / 2.5; b++) {
+      const base = 2200 + Math.random() * 2500, up = Math.random() < 0.5;
+      let t = Math.random() * (secs - 1) * rate;
+      for (let n = 0, count = 2 + Math.floor(Math.random() * 3); n < count; n++) {
+        addTone(a, t, up ? base : base * 1.4, up ? base * 1.5 : base,
+          0.06 + Math.random() * 0.1, 0.12 + Math.random() * 0.1);
+        t += 0.18 * rate;
+      }
     }
   } else if (kind === "rain") {
     // Steady hiss: noise with the low rumble removed
@@ -257,9 +355,45 @@ function fillNoise(kind, a) {
   for (let i = 0; i < a.length; i++) a[i] *= k;
 }
 
+// Kids: a gentle music-box tune (Twinkle, Twinkle, Little Star), built from notes
+function makeLullaby() {
+  const rate = ctx.sampleRate, beat = 0.7; // seconds per note
+  // Notes as semitones above C: C=0 D=2 E=4 F=5 G=7 A=9
+  const tune = [0,0,7,7,9,9,7, 5,5,4,4,2,2,0, 7,7,5,5,4,4,2,
+                7,7,5,5,4,4,2, 0,0,7,7,9,9,7, 5,5,4,4,2,2,0];
+  const len = Math.floor(46 * beat * rate); // tune + a short rest, then it repeats
+  const buf = ctx.createBuffer(2, len, rate);
+  const out = buf.getChannelData(0);
+  tune.forEach((semi, n) => {
+    const f = 523.25 * Math.pow(2, semi / 12); // soft music-box range
+    const start = Math.floor((n + Math.floor(n / 7) * 0.5) * beat * rate); // pause between phrases
+    for (let j = 0; j < 2 * rate; j++) {
+      const t = j / rate, w = 2 * Math.PI * f * t;
+      const env = Math.min(1, t / 0.004) * Math.exp(-t * 2.2); // quick pluck, slow fade
+      const tone = Math.sin(w) + 0.3 * Math.sin(2 * w) + 0.1 * Math.sin(3.01 * w);
+      out[(start + j) % len] += tone * env * 0.2; // % wraps the last note's ring into the start
+    }
+  });
+  buf.getChannelData(1).set(out);
+  return buf;
+}
+
+// Adds one soft low "thump" that wraps around the loop end (used by Heartbeat)
+function thump(out, start, f0, f1, seconds, amp) {
+  const rate = ctx.sampleRate, n = Math.floor(seconds * rate), s = Math.floor(start);
+  let ph = 0;
+  for (let j = 0; j < n; j++) {
+    const x = j / n;
+    ph += 2 * Math.PI * (f0 + (f1 - f0) * x) / rate;
+    out[(s + j) % out.length] += (Math.sin(ph) + 0.5 * Math.sin(2 * ph)) * amp
+      * Math.min(1, j / (0.006 * rate)) * Math.exp(-x * 4);
+  }
+}
+
 function makeBuffer(kind) {
+  if (kind === "lullaby") return makeLullaby();
   const rate = ctx.sampleRate;
-  const len = Math.floor(LOOP_SECONDS * rate);
+  const len = Math.floor((kind === "nature" ? 30 : LOOP_SECONDS) * rate); // nature loops longer so birds repeat less
   const seam = Math.floor(SEAM_SECONDS * rate);
   const buf = ctx.createBuffer(2, len, rate); // stereo, each side different
   for (let c = 0; c < 2; c++) {
@@ -272,13 +406,40 @@ function makeBuffer(kind) {
       const t = (i / seam) * Math.PI / 2;
       out[i] = raw[i] * Math.sin(t) + raw[len + i] * Math.cos(t);
     }
+    if (kind === "fan") { // motor hum + slow blade pulse (whole cycles, so the loop stays seamless)
+      for (let i = 0; i < len; i++) {
+        const tau = 2 * Math.PI * i / rate;
+        out[i] = out[i] * (1 + 0.12 * Math.sin(tau * 5)) + 0.03 * Math.sin(tau * 100) + 0.012 * Math.sin(tau * 200);
+      }
+    }
+    if (kind === "shush") { // slow "shhh... shhh" swell, 8 per loop
+      for (let i = 0; i < len; i++) {
+        const swell = 0.5 - 0.5 * Math.cos(2 * Math.PI * 0.8 * i / rate);
+        out[i] *= 0.15 + 0.85 * swell * swell;
+      }
+    }
+    if (kind === "heart") { // quiet rumble plus "lub-dub", 72 beats a minute (12 per loop)
+      for (let i = 0; i < len; i++) out[i] *= 0.3;
+      for (let b = 0; b < 12; b++) {
+        const start = b * len / 12;
+        thump(out, start, 120, 70, 0.14, 0.5);
+        thump(out, start + 0.3 * rate, 140, 90, 0.1, 0.32);
+      }
+    }
   }
   return buf;
 }
 
 // ---- Audio setup and playback ----
 function setupAudio() {
+  // iPhone/iPad: play as "media" so the silent (ringer) switch doesn't mute us
+  if (navigator.audioSession) navigator.audioSession.type = "playback";
   ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
+  // iOS unlock: start one empty sound right inside the tap
+  const unlock = ctx.createBufferSource();
+  unlock.buffer = ctx.createBuffer(1, 1, 22050);
+  unlock.connect(ctx.destination);
+  unlock.start(0);
   master = ctx.createGain();   // volume
   master.gain.value = volToGain(volume);
   fadeGain = ctx.createGain(); // fades for play / pause / sleep timer
@@ -429,7 +590,7 @@ function render() {
   renderTimer();
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: type[0].toUpperCase() + type.slice(1) + " noise", artist: "Still"
+      title: type[0].toUpperCase() + type.slice(1), artist: "Still"
     });
     navigator.mediaSession.playbackState = playing ? "playing" : "paused";
   }
@@ -441,7 +602,7 @@ function save() {
 
 // ---- Forest view: an animated scene drawn with code (no video file) ----
 const scene = $("#scene"), cv = $("#view"), c2 = cv.getContext("2d");
-let W = 0, H = 0, raf = 0, lastFrame = 0, uiTimer = null;
+let W = 0, H = 0, raf = 0, lastFrame = 0, uiTimer = null, view = "forest";
 
 // Trees are placed once using a seeded random, so they never reshuffle
 let seed = 7;
@@ -472,7 +633,8 @@ function drawTree(x, base, h, sw, color) {
   c2.fill();
 }
 
-function draw(t, dt) {
+// Each view is its own drawing function; draw() picks the chosen one.
+function drawForest(t, dt) {
   c2.fillStyle = "#07080a"; // the dark room
   c2.fillRect(0, 0, W, H);
   const m = Math.min(W, H) * 0.07;
@@ -520,6 +682,113 @@ function draw(t, dt) {
   c2.fillStyle = "#171a20"; c2.fillRect(m * 0.6, wy + wh + 4, W - m * 1.2, m * 0.5);
 }
 
+// ---- Night sky: twinkling stars, a moon and now and then a shooting star ----
+const stars = Array.from({ length: 120 }, () => ({ x: rnd(), y: rnd() * 0.75, r: 0.6 + rnd() * 1.2, p: rnd() * 6.28, s: 0.5 + rnd() }));
+let shoot = null;
+
+function ridge(base, amp, f, ph, color) { // a hill silhouette made from sine waves
+  c2.fillStyle = color; c2.beginPath(); c2.moveTo(0, H);
+  for (let x = 0; x <= W + 8; x += 8) {
+    c2.lineTo(x, base - amp * (Math.sin(x / W * f + ph) + 0.5 * Math.sin(x / W * f * 2.3 + ph * 2)));
+  }
+  c2.lineTo(W, H); c2.closePath(); c2.fill();
+}
+
+function drawNight(t, dt) {
+  const sky = c2.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#05060f"); sky.addColorStop(0.7, "#0f1630"); sky.addColorStop(1, "#1b2347");
+  c2.fillStyle = sky; c2.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    c2.fillStyle = `rgba(235,240,255,${0.45 + 0.4 * Math.sin(t / 900 * s.s + s.p)})`;
+    c2.fillRect(s.x * W, s.y * H, s.r, s.r);
+  }
+  const mx = W * 0.72, my = H * 0.2, mr = Math.min(W, H) * 0.06;
+  const glow = c2.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 4);
+  glow.addColorStop(0, "rgba(200,215,255,.3)"); glow.addColorStop(1, "rgba(200,215,255,0)");
+  c2.fillStyle = glow; c2.fillRect(0, 0, W, H);
+  c2.fillStyle = "#e8ecf5"; c2.beginPath(); c2.arc(mx, my, mr, 0, 6.29); c2.fill();
+  if (!shoot && Math.random() < dt / 15000) shoot = { x: Math.random() * W * 0.7, y: Math.random() * H * 0.3, u: 0 };
+  if (shoot) {
+    shoot.u += dt / 800;
+    const x = shoot.x + shoot.u * W * 0.25, y = shoot.y + shoot.u * H * 0.12;
+    c2.strokeStyle = `rgba(255,255,255,${Math.max(0, 1 - shoot.u)})`; c2.lineWidth = 1.5;
+    c2.beginPath(); c2.moveTo(x - W * 0.06, y - H * 0.03); c2.lineTo(x, y); c2.stroke();
+    if (shoot.u >= 1) shoot = null;
+  }
+  ridge(H * 0.82, H * 0.05, 5, 1, "#0b1126");
+  ridge(H * 0.9, H * 0.04, 8, 4, "#04060d");
+}
+
+// ---- Ocean: slow waves under a low sun at dusk ----
+function drawOcean(t) {
+  const hy = H * 0.5;
+  const sky = c2.createLinearGradient(0, 0, 0, hy);
+  sky.addColorStop(0, "#1b2748"); sky.addColorStop(1, "#d58b72");
+  c2.fillStyle = sky; c2.fillRect(0, 0, W, hy);
+  c2.fillStyle = "#ffd9a8"; c2.beginPath(); c2.arc(W / 2, hy, Math.min(W, H) * 0.09, 0, 6.29); c2.fill();
+  const sea = c2.createLinearGradient(0, hy, 0, H);
+  sea.addColorStop(0, "#2c4766"); sea.addColorStop(1, "#0a1423");
+  c2.fillStyle = sea; c2.fillRect(0, hy, W, H - hy);
+  for (let k = 0; k < 14; k++) { // sun glitter on the water
+    const w = (14 + k * 9) * (1 + 0.3 * Math.sin(t / 700 + k * 2));
+    c2.fillStyle = `rgba(255,210,160,${0.28 - k * 0.015})`;
+    c2.fillRect(W / 2 - w / 2, hy + 4 + k * (H - hy) * 0.06, w, 2);
+  }
+  c2.lineWidth = 1.5;
+  for (let l = 0; l < 6; l++) { // wave lines drifting at different speeds
+    c2.strokeStyle = `rgba(255,255,255,${0.05 + l * 0.02})`;
+    const y0 = hy + (H - hy) * (0.1 + l * 0.16), amp = 3 + l * 3;
+    c2.beginPath();
+    for (let x = 0; x <= W + 8; x += 8) {
+      const y = y0 + amp * Math.sin(x / (80 + 30 * l) + t / (1500 - 150 * l));
+      x ? c2.lineTo(x, y) : c2.moveTo(x, y);
+    }
+    c2.stroke();
+  }
+}
+
+// ---- Fire: flickering flames and rising sparks ----
+const sparks = Array.from({ length: 28 }, () => ({ x: rnd(), u: rnd(), v: 0.1 + rnd() * 0.2, p: rnd() * 6.28 }));
+
+function flame(x, y, w, h, sway, color) {
+  c2.fillStyle = color; c2.beginPath(); c2.moveTo(x - w, y);
+  c2.quadraticCurveTo(x - w, y - h * 0.5, x + sway, y - h);
+  c2.quadraticCurveTo(x + w, y - h * 0.5, x + w, y);
+  c2.closePath(); c2.fill();
+}
+
+function drawFire(t, dt) {
+  c2.fillStyle = "#070506"; c2.fillRect(0, 0, W, H);
+  const cx = W / 2, by = H * 0.72, s = Math.min(W, H);
+  const flick = 0.85 + 0.15 * Math.sin(t / 130) * Math.sin(t / 370);
+  const gl = c2.createRadialGradient(cx, by - s * 0.15, 0, cx, by - s * 0.15, s * 0.9 * flick);
+  gl.addColorStop(0, "rgba(255,140,40,.45)"); gl.addColorStop(1, "rgba(255,140,40,0)");
+  c2.fillStyle = gl; c2.fillRect(0, 0, W, H);
+  c2.fillStyle = "#1b110c"; // two crossed logs
+  c2.save(); c2.translate(cx, by);
+  c2.rotate(0.12); c2.fillRect(-s * 0.3, -s * 0.03, s * 0.6, s * 0.06);
+  c2.rotate(-0.24); c2.fillRect(-s * 0.3, -s * 0.03, s * 0.6, s * 0.06);
+  c2.restore();
+  c2.globalCompositeOperation = "lighter"; // overlapping flames glow brighter
+  for (let i = 0; i < 7; i++) {
+    const fx = cx + (i - 3) * s * 0.05;
+    const h = s * (0.22 - Math.abs(i - 3) * 0.03) * (0.8 + 0.2 * Math.sin(t / (180 + i * 35) + i * 2));
+    const sway = Math.sin(t / (260 + i * 60) + i) * s * 0.02;
+    flame(fx, by - s * 0.02, s * 0.055, h, sway, "rgba(255,120,30,.35)");
+    flame(fx, by - s * 0.02, s * 0.03, h * 0.6, sway * 0.7, "rgba(255,200,90,.45)");
+  }
+  c2.globalCompositeOperation = "source-over";
+  for (const p of sparks) {
+    p.u += dt * p.v / 1000;
+    if (p.u > 1) { p.u = 0; p.x = Math.random(); }
+    c2.fillStyle = `rgba(255,170,70,${(1 - p.u) * 0.8})`;
+    c2.fillRect(cx + (p.x - 0.5) * s * 0.25 + Math.sin(t / 600 + p.p) * s * 0.02, by - s * 0.1 - p.u * s * 0.5, 2, 2);
+  }
+}
+
+const VIEWS = { forest: drawForest, night: drawNight, ocean: drawOcean, fire: drawFire };
+function draw(t, dt) { VIEWS[view](t, dt); }
+
 function frame(now) {
   raf = requestAnimationFrame(frame);
   if (now - lastFrame < 40) return; // about 25 frames a second saves battery
@@ -540,7 +809,8 @@ function showUi() { // buttons fade away after a few seconds
   uiTimer = setTimeout(() => $("#sceneUi").classList.add("off"), 3500);
 }
 
-async function openScene() {
+async function openScene(name) {
+  view = name;
   scene.hidden = false;
   try { await scene.requestFullscreen(); } catch (e) {} // falls back to covering the page
   resize();
@@ -556,7 +826,8 @@ function closeScene() {
   if (document.fullscreenElement) document.exitFullscreen();
 }
 
-$("#openScene").addEventListener("click", openScene);
+document.querySelectorAll(".scene-btn").forEach((b) =>
+  b.addEventListener("click", () => openScene(b.dataset.view)));
 $("#sceneClose").addEventListener("click", closeScene);
 $("#scenePlay").addEventListener("click", toggle);
 scene.addEventListener("pointerdown", showUi);
